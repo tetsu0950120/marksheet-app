@@ -128,3 +128,399 @@
         <h3 class="text-base font-bold text-slate-700 border-b pb-2">科目別正答率</h3>
         <div id="res-subjects" class="space-y-3"></div>
       </div>
+
+      <div class="bg-white rounded-xl shadow-sm p-5 space-y-3">
+        <h3 class="text-base font-bold text-slate-700 border-b pb-2">設問別正誤一覧</h3>
+        <div id="res-detail-list" class="divide-y divide-slate-100 text-sm"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    let appState = {
+      config: { count: 20, options: 4 },
+      subjects: [
+        { name: '全体', start: 1, end: 20 }
+      ],
+      keyAnswers: {},
+      studentAnswers: {}
+    };
+
+    let historyList = [];
+    let currentInputMode = 'student';
+
+    function saveState() {
+      localStorage.setItem('marksheet_app_data', JSON.stringify(appState));
+      localStorage.setItem('marksheet_app_history', JSON.stringify(historyList));
+      const badge = document.getElementById('save-status');
+      badge.classList.remove('opacity-0');
+      setTimeout(() => badge.classList.add('opacity-0'), 1000);
+    }
+
+    function loadState() {
+      const saved = localStorage.getItem('marksheet_app_data');
+      if (saved) { try { appState = JSON.parse(saved); } catch(e) {} }
+      const savedHist = localStorage.getItem('marksheet_app_history');
+      if (savedHist) { try { historyList = JSON.parse(savedHist); } catch(e) {} }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadState();
+      renderConfig();
+      renderSubjectList();
+      renderSheet();
+      renderHistory();
+    });
+
+    function switchTab(tabName) {
+      ['config', 'input', 'result'].forEach(t => {
+        document.getElementById(`sec-${t}`).classList.add('hidden');
+        document.getElementById(`tab-${t}`).className = 'flex-1 py-2 rounded-md transition-all text-center text-slate-600';
+      });
+      document.getElementById(`sec-${tabName}`).classList.remove('hidden');
+      document.getElementById(`tab-${tabName}`).className = 'flex-1 py-2 rounded-md transition-all text-center bg-white shadow text-indigo-600 font-bold';
+    }
+
+    function renderConfig() {
+      document.getElementById('cfg-count').value = appState.config.count;
+      document.getElementById('cfg-options').value = appState.config.options;
+    }
+
+    function updateConfig() {
+      const count = Math.min(200, Math.max(1, parseInt(document.getElementById('cfg-count').value) || 1));
+      const options = parseInt(document.getElementById('cfg-options').value) || 4;
+      appState.config.count = count;
+      appState.config.options = options;
+
+      if (appState.subjects.length === 1 && appState.subjects[0].name === '全体') {
+        appState.subjects[0].end = count;
+      }
+      
+      saveState();
+      renderSubjectList();
+      renderSheet();
+    }
+
+    // スライドバー付き科目設定の描画（文字サイズ拡大版）
+    function renderSubjectList() {
+      const container = document.getElementById('subject-list');
+      container.innerHTML = '';
+      const maxCount = appState.config.count;
+
+      appState.subjects.forEach((sub, idx) => {
+        if (sub.start > maxCount) sub.start = maxCount;
+        if (sub.end > maxCount) sub.end = maxCount;
+
+        const row = document.createElement('div');
+        row.className = 'bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3';
+        row.innerHTML = `
+          <div class="flex items-center gap-2">
+            <input type="text" value="${sub.name}" onchange="updateSubject(${idx}, 'name', this.value)" class="flex-1 border rounded-lg px-3 py-2 text-sm font-bold bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="科目名">
+            ${appState.subjects.length > 1 ? `<button onclick="removeSubjectRow(${idx})" class="text-rose-500 hover:text-rose-700 text-xs font-bold px-2.5 py-1">削除</button>` : ''}
+          </div>
+          <div class="space-y-1">
+            <div class="flex justify-between text-sm text-slate-700">
+              <span class="font-medium">開始問題</span>
+              <span class="font-bold text-indigo-600 text-base"><strong id="start-val-${idx}">${sub.start}</strong> 問目</span>
+            </div>
+            <input type="range" min="1" max="${maxCount}" value="${sub.start}" oninput="onSliderInput(${idx}, 'start', this.value)" class="w-full h-2 accent-indigo-600 cursor-pointer">
+          </div>
+          <div class="space-y-1">
+            <div class="flex justify-between text-sm text-slate-700">
+              <span class="font-medium">終了問題</span>
+              <span class="font-bold text-indigo-600 text-base"><strong id="end-val-${idx}">${sub.end}</strong> 問目</span>
+            </div>
+            <input type="range" min="1" max="${maxCount}" value="${sub.end}" oninput="onSliderInput(${idx}, 'end', this.value)" class="w-full h-2 accent-indigo-600 cursor-pointer">
+          </div>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    function onSliderInput(idx, key, val) {
+      const numVal = parseInt(val) || 1;
+      appState.subjects[idx][key] = numVal;
+      
+      // 大きくした数値ラベルをリアルタイム更新
+      document.getElementById(`${key}-val-${idx}`).innerText = numVal;
+      saveState();
+    }
+
+    function addSubjectRow() {
+      const lastEnd = appState.subjects.length > 0 ? appState.subjects[appState.subjects.length - 1].end : 0;
+      const start = Math.min(appState.config.count, lastEnd + 1);
+      appState.subjects.push({ name: `科目 ${appState.subjects.length + 1}`, start: start, end: appState.config.count });
+      saveState();
+      renderSubjectList();
+    }
+
+    function updateSubject(idx, key, val) {
+      if (key === 'name') appState.subjects[idx].name = val;
+      saveState();
+    }
+
+    function removeSubjectRow(idx) {
+      appState.subjects.splice(idx, 1);
+      saveState();
+      renderSubjectList();
+    }
+
+    function resetData() {
+      if (confirm('入力した正解および解答データをすべて消去しますか？')) {
+        appState.keyAnswers = {};
+        appState.studentAnswers = {};
+        saveState();
+        renderSheet();
+      }
+    }
+
+    function setAnswerMode(mode) {
+      currentInputMode = mode;
+      const btnSt = document.getElementById('mode-student');
+      const btnKey = document.getElementById('mode-key');
+      const badge = document.getElementById('mode-badge');
+
+      if (mode === 'student') {
+        btnSt.className = 'px-3 py-1.5 rounded-md bg-white shadow text-indigo-600 font-bold';
+        btnKey.className = 'px-3 py-1.5 rounded-md text-slate-500';
+        badge.className = 'text-xs px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-700 font-bold';
+        badge.innerText = '生徒マーク入力中';
+      } else {
+        btnKey.className = 'px-3 py-1.5 rounded-md bg-white shadow text-amber-600 font-bold';
+        btnSt.className = 'px-3 py-1.5 rounded-md text-slate-500';
+        badge.className = 'text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 font-bold';
+        badge.innerText = '正解キー入力中';
+      }
+      renderSheet();
+    }
+
+    function renderSheet() {
+      const container = document.getElementById('sheet-container');
+      container.innerHTML = '';
+
+      const count = appState.config.count;
+      const optCount = appState.config.options;
+      const answers = currentInputMode === 'student' ? appState.studentAnswers : appState.keyAnswers;
+
+      for (let q = 1; q <= count; q++) {
+        const item = document.createElement('div');
+        item.className = 'bg-white rounded-xl p-3 shadow-sm border border-slate-200 flex items-center justify-between';
+
+        let buttonsHTML = '';
+        for (let opt = 1; opt <= optCount; opt++) {
+          const isSelected = answers[q] === opt;
+          const activeColor = currentInputMode === 'student' 
+            ? 'bg-indigo-600 text-white border-indigo-600 scale-105 shadow' 
+            : 'bg-amber-500 text-white border-amber-500 scale-105 shadow';
+
+          buttonsHTML += `
+            <button onclick="selectOption(${q}, ${opt})" class="w-10 h-10 rounded-full border-2 font-bold text-sm transition-all flex items-center justify-center ${isSelected ? activeColor : 'border-slate-300 text-slate-600 hover:bg-slate-50'}">
+              ${opt}
+            </button>
+          `;
+        }
+
+        item.innerHTML = `
+          <div class="flex items-center gap-3">
+            <span class="w-8 text-right font-bold text-slate-500 text-sm">Q${q}</span>
+            <div class="flex gap-2">${buttonsHTML}</div>
+          </div>
+          ${answers[q] ? `<button onclick="selectOption(${q}, null)" class="text-xs text-slate-400 hover:text-rose-500 px-2 py-1">消去</button>` : ''}
+        `;
+        container.appendChild(item);
+      }
+    }
+
+    function selectOption(q, opt) {
+      const target = currentInputMode === 'student' ? appState.studentAnswers : appState.keyAnswers;
+      if (opt === null || target[q] === opt) {
+        delete target[q];
+      } else {
+        target[q] = opt;
+      }
+      saveState();
+      renderSheet();
+    }
+
+    function calculateScore() {
+      const count = appState.config.count;
+      let totalCorrect = 0;
+
+      const detailContainer = document.getElementById('res-detail-list');
+      detailContainer.innerHTML = '';
+
+      for (let q = 1; q <= count; q++) {
+        const student = appState.studentAnswers[q];
+        const key = appState.keyAnswers[q];
+        const isCorrect = student !== undefined && key !== undefined && student === key;
+        if (isCorrect) totalCorrect++;
+
+        const row = document.createElement('div');
+        row.className = 'py-2.5 flex items-center justify-between';
+        
+        let statusBadge = `<span class="text-slate-400 text-xs">未入力</span>`;
+        if (key === undefined) {
+          statusBadge = `<span class="text-amber-500 text-xs font-bold">正解未設定</span>`;
+        } else if (isCorrect) {
+          statusBadge = `<span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-xs font-bold">正解 (◯)</span>`;
+        } else {
+          statusBadge = `<span class="bg-rose-100 text-rose-700 px-2 py-0.5 rounded text-xs font-bold">不正解 (✕)</span>`;
+        }
+
+        row.innerHTML = `
+          <div class="flex items-center gap-3">
+            <span class="font-bold text-slate-600 w-8">Q${q}</span>
+            ${statusBadge}
+          </div>
+          <div class="text-xs text-slate-500">
+            解答: <strong class="text-slate-700">${student || '-'}</strong> / 正解: <strong class="text-slate-700">${key || '-'}</strong>
+          </div>
+        `;
+        detailContainer.appendChild(row);
+      }
+
+      const totalPct = count > 0 ? Math.round((totalCorrect / count) * 100) : 0;
+      document.getElementById('res-score-pct').innerHTML = `${totalPct}<span class="text-2xl font-bold">%</span>`;
+      document.getElementById('res-score-detail').innerText = `正解数: ${totalCorrect} / ${count}問`;
+
+      const subContainer = document.getElementById('res-subjects');
+      subContainer.innerHTML = '';
+
+      appState.subjects.forEach(sub => {
+        let subCorrect = 0;
+        let subTotal = 0;
+
+        for (let q = sub.start; q <= Math.min(sub.end, count); q++) {
+          subTotal++;
+          if (appState.studentAnswers[q] !== undefined && appState.keyAnswers[q] !== undefined && appState.studentAnswers[q] === appState.keyAnswers[q]) {
+            subCorrect++;
+          }
+        }
+
+        const subPct = subTotal > 0 ? Math.round((subCorrect / subTotal) * 100) : 0;
+
+        const subEl = document.createElement('div');
+        subEl.className = 'space-y-1';
+        subEl.innerHTML = `
+          <div class="flex justify-between text-xs font-bold">
+            <span class="text-slate-700">${sub.name} (${sub.start}〜${sub.end}問)</span>
+            <span class="text-indigo-600">${subCorrect} / ${subTotal}問 (${subPct}%)</span>
+          </div>
+          <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+            <div class="bg-indigo-600 h-full transition-all duration-500" style="width: ${subPct}%"></div>
+          </div>
+        `;
+        subContainer.appendChild(subEl);
+      });
+
+      renderHistory();
+    }
+
+    function saveNamedResult() {
+      const input = document.getElementById('save-title');
+      const title = input.value.trim() || `採点結果_${new Date().toLocaleString('ja-JP').slice(0, 16)}`;
+
+      const record = {
+        id: Date.now(),
+        title: title,
+        date: new Date().toLocaleString('ja-JP'),
+        state: JSON.parse(JSON.stringify(appState))
+      };
+
+      historyList.unshift(record);
+      saveState();
+      renderHistory();
+      input.value = '';
+      alert(`「${title}」を保存しました。`);
+    }
+
+    function renderHistory() {
+      const container = document.getElementById('history-list');
+      if (historyList.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-400">保存された履歴はありません。</p>`;
+        return;
+      }
+
+      container.innerHTML = '';
+      historyList.forEach((item, idx) => {
+        const el = document.createElement('div');
+        el.className = 'flex items-center justify-between bg-slate-50 p-2.5 rounded-lg border border-slate-200';
+        el.innerHTML = `
+          <div>
+            <div class="font-bold text-slate-700">${item.title}</div>
+            <div class="text-xs text-slate-400">${item.date} (${item.state.config.count}問)</div>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="loadHistoryItem(${idx})" class="text-xs bg-indigo-50 text-indigo-600 px-2.5 py-1 rounded hover:bg-indigo-100 font-bold">読み込み</button>
+            <button onclick="deleteHistoryItem(${idx})" class="text-xs text-rose-500 hover:text-rose-700 px-1">削除</button>
+          </div>
+        `;
+        container.appendChild(el);
+      });
+    }
+
+    function loadHistoryItem(idx) {
+      if (confirm(`「${historyList[idx].title}」のデータを復元しますか？`)) {
+        appState = JSON.parse(JSON.stringify(historyList[idx].state));
+        saveState();
+        renderConfig();
+        renderSubjectList();
+        renderSheet();
+        calculateScore();
+        alert('読み込みました。');
+      }
+    }
+
+    function deleteHistoryItem(idx) {
+      if (confirm(`「${historyList[idx].title}」を削除しますか？`)) {
+        historyList.splice(idx, 1);
+        saveState();
+        renderHistory();
+      }
+    }
+
+    function exportCSV() {
+      const count = appState.config.count;
+      const titleInput = document.getElementById('save-title').value.trim();
+      const fileName = titleInput ? `${titleInput}.csv` : `マークシート採点結果_${new Date().toISOString().slice(0, 10)}.csv`;
+
+      let csvContent = '\uFEFF';
+      csvContent += `設問番号,生徒解答,正解,判定,科目\n`;
+
+      for (let q = 1; q <= count; q++) {
+        const student = appState.studentAnswers[q] || '';
+        const key = appState.keyAnswers[q] || '';
+        let judge = '未設定';
+        if (key !== '') {
+          judge = (student === key) ? '正解' : '不正解';
+        }
+
+        let subName = '';
+        const sub = appState.subjects.find(s => q >= s.start && q <= s.end);
+        if (sub) subName = sub.name;
+
+        csvContent += `Q${q},${student},${key},${judge},"${subName}"\n`;
+      }
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', fileName);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('Service Worker 登録成功:', reg.scope))
+          .catch(err => console.log('Service Worker 登録失敗:', err));
+      });
+    }
+  </script>
+</body>
+</html>
