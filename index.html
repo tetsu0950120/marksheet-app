@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>マークシート採点</title>
+
+  <!-- iOSホーム画面追加用アイコン・PWA設定 -->
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="マークシート採点">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* iOSでのタップ強調ハイライト防止 */
+    * {
+      -webkit-tap-highlight-color: transparent;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen pb-12 select-none">
+
+  <!-- ヘッダー -->
+  <header class="bg-indigo-600 text-white shadow-md sticky top-0 z-30">
+    <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+      <h1 class="text-lg font-bold tracking-wide flex items-center gap-2">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        マークシート採点
+      </h1>
+      <div id="save-status" class="text-xs bg-indigo-700 px-2 py-1 rounded text-indigo-100 opacity-0 transition-opacity duration-300">
+        保存済
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-3xl mx-auto px-4 mt-4 space-y-6">
+
+    <!-- ナビゲーションタブ -->
+    <nav class="flex rounded-lg bg-slate-200 p-1 text-sm font-medium">
+      <button onclick="switchTab('config')" id="tab-config" class="flex-1 py-2 rounded-md transition-all text-center bg-white shadow text-indigo-600 font-bold">1. 設定</button>
+      <button onclick="switchTab('input')" id="tab-input" class="flex-1 py-2 rounded-md transition-all text-center text-slate-600">2. 解答入力</button>
+      <button onclick="switchTab('result')" id="tab-result" class="flex-1 py-2 rounded-md transition-all text-center text-slate-600">3. 採点結果</button>
+    </nav>
+
+    <!-- SECTION 1: 設定画面 -->
+    <section id="sec-config" class="bg-white rounded-xl shadow-sm p-5 space-y-5">
+      <h2 class="text-base font-bold text-slate-700 border-b pb-2">基本設定</h2>
+      
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-600 mb-1">問題数 (1〜200問)</label>
+          <input type="number" id="cfg-count" min="1" max="200" value="20" onchange="updateConfig()" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-600 mb-1">選択肢のタイプ</label>
+          <select id="cfg-options" onchange="updateConfig()" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            <option value="4">4択 (1〜4)</option>
+            <option value="5">5択 (1〜5)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 科目範囲割り当て -->
+      <div class="space-y-3 pt-2">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-bold text-slate-700">科目・大問配分</h3>
+          <button onclick="addSubjectRow()" class="text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-1.5 rounded-lg font-semibold transition">+ 科目を追加</button>
+        </div>
+        <div id="subject-list" class="space-y-2">
+          <!-- 動的生成 -->
+        </div>
+      </div>
+
+      <div class="pt-2 flex gap-3">
+        <button onclick="resetData()" class="flex-1 py-2.5 border border-rose-300 text-rose-600 hover:bg-rose-50 rounded-lg font-medium text-sm transition">初期化</button>
+        <button onclick="switchTab('input')" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg font-medium text-sm shadow hover:bg-indigo-700 transition">解答入力へ進む →</button>
+      </div>
+    </section>
+
+    <!-- SECTION 2: 解答入力画面 -->
+    <section id="sec-input" class="hidden space-y-4">
+      <!-- 入力モード切り替えバー -->
+      <div class="bg-white p-3 rounded-xl shadow-sm flex items-center justify-between">
+        <div class="flex bg-slate-100 p-1 rounded-lg text-xs font-semibold">
+          <button id="mode-student" onclick="setAnswerMode('student')" class="px-3 py-1.5 rounded-md bg-white shadow text-indigo-600">生徒のマーク入力</button>
+          <button id="mode-key" onclick="setAnswerMode('key')" class="px-3 py-1.5 rounded-md text-slate-500">正解（解答キー）入力</button>
+        </div>
+        <span id="mode-badge" class="text-xs px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-700 font-bold">生徒マークモード</span>
+      </div>
+
+      <!-- マークシートリスト -->
+      <div id="sheet-container" class="space-y-3">
+        <!-- 動的生成 -->
+      </div>
+
+      <div class="pt-2">
+        <button onclick="switchTab('result'); calculateScore();" class="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition">採点実行 & 結果表示</button>
+      </div>
+    </section>
+
+    <!-- SECTION 3: 採点結果画面 -->
+    <section id="sec-result" class="hidden space-y-5">
+      <!-- 総合結果カード -->
+      <div class="bg-gradient-to-br from-indigo-600 to-indigo-800 text-white rounded-2xl p-6 shadow-md text-center space-y-2">
+        <p class="text-xs uppercase tracking-wider text-indigo-200">総合正答率</p>
+        <div class="text-5xl font-black tracking-tight" id="res-score-pct">0<span class="text-2xl font-bold">%</span></div>
+        <p class="text-sm text-indigo-100" id="res-score-detail">正解数: 0 / 0問</p>
+      </div>
+
+      <!-- 科目別結果 -->
+      <div class="bg-white rounded-xl shadow-sm p-5 space-y-4">
+        <h3 class="text-base font-bold text-slate-700 border-b pb-2">科目別正答率</h3>
+        <div id="res-subjects" class="space-y-3">
+          <!-- 動的生成 -->
+        </div>
+      </div>
+
+      <!-- 設問別詳細一覧 -->
+      <div class="bg-white rounded-xl shadow-sm p-5 space-y-3">
+        <h3 class="text-base font-bold text-slate-700 border-b pb-2">設問別正誤一覧</h3>
+        <div id="res-detail-list" class="divide-y divide-slate-100 text-sm">
+          <!-- 動的生成 -->
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // --- アプリデータ構造 ---
+    let appState = {
+      config: { count: 20, options: 4 },
+      subjects: [
+        { name: '全体', start: 1, end: 20 }
+      ],
+      keyAnswers: {},   // { 1: 2, 2: 4 ... }
+      studentAnswers: {} // { 1: 2, 2: 3 ... }
+    };
+
+    let currentInputMode = 'student'; // 'student' or 'key'
+
+    // --- ローカルストレージ自動保存 / 読み込み ---
+    function saveState() {
+      localStorage.setItem('marksheet_app_data', JSON.stringify(appState));
+      const badge = document.getElementById('save-status');
+      badge.classList.remove('opacity-0');
+      setTimeout(() => badge.classList.add('opacity-0'), 1000);
+    }
+
+    function loadState() {
+      const saved = localStorage.getItem('marksheet_app_data');
+      if (saved) {
+        try {
+          appState = JSON.parse(saved);
+        } catch(e) {}
+      }
+    }
+
+    // --- 初期化 & レンダリング ---
+    window.addEventListener('DOMContentLoaded', () => {
+      loadState();
+      renderConfig();
+      renderSubjectList();
+      renderSheet();
+    });
+
+    // --- タブ切替 ---
+    function switchTab(tabName) {
+      ['config', 'input', 'result'].forEach(t => {
+        document.getElementById(`sec-${t}`).classList.add('hidden');
+        document.getElementById(`tab-${t}`).className = 'flex-1 py-2 rounded-md transition-all text-center text-slate-600';
+      });
+      document.getElementById(`sec-${tabName}`).classList.remove('hidden');
+      document.getElementById(`tab-${tabName}`).className = 'flex-1 py-2 rounded-md transition-all text-center bg-white shadow text-indigo-600 font-bold';
+    }
+
+    // --- 設定管理 ---
+    function renderConfig() {
+      document.getElementById('cfg-count').value = appState.config.count;
+      document.getElementById('cfg-options').value = appState.config.options;
+    }
+
+    function updateConfig() {
+      const count = Math.min(200, Math.max(1, parseInt(document.getElementById('cfg-count').value) || 1));
+      const options = parseInt(document.getElementById('cfg-options').value) || 4;
+      appState.config.count = count;
+      appState.config.options = options;
+
+      // 初回または空の場合デフォルト科目を調整
+      if (appState.subjects.length === 1 && appState.subjects[0].name === '全体') {
+        appState.subjects[0].end = count;
+      }
+      
+      saveState();
+      renderSubjectList();
+      renderSheet();
+    }
+
+    function renderSubjectList() {
+      const container = document.getElementById('subject-list');
+      container.innerHTML = '';
+      appState.subjects.forEach((sub, idx) => {
+        const row = document.createElement('div');
+        row.className = 'flex items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200 text-xs sm:text-sm';
+        row.innerHTML = `
+          <input type="text" value="${sub.name}" onchange="updateSubject(${idx}, 'name', this.value)" class="flex-1 border rounded px-2 py-1 focus:outline-none" placeholder="科目名">
+          <input type="number" value="${sub.start}" min="1" max="${appState.config.count}" onchange="updateSubject(${idx}, 'start', this.value)" class="w-14 border rounded px-1 py-1 text-center">
+          <span>〜</span>
+          <input type="number" value="${sub.end}" min="1" max="${appState.config.count}" onchange="updateSubject(${idx}, 'end', this.value)" class="w-14 border rounded px-1 py-1 text-center">
+          <span class="text-slate-400">問</span>
+          ${appState.subjects.length > 1 ? `<button onclick="removeSubjectRow(${idx})" class="text-rose-500 font-bold px-1">✕</button>` : ''}
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    function addSubjectRow() {
+      const lastEnd = appState.subjects.length > 0 ? appState.subjects[appState.subjects.length - 1].end : 0;
+      const start = Math.min(appState.config.count, lastEnd + 1);
+      appState.subjects.push({ name: `科目 ${appState.subjects.length + 1}`, start: start, end: appState.config.count });
+      saveState();
+      renderSubjectList();
+    }
+
+    function updateSubject(idx, key, val) {
+      if (key === 'name') appState.subjects[idx].name = val;
+      else appState.subjects[idx][key] = parseInt(val) || 1;
+      saveState();
+    }
+
+    function removeSubjectRow(idx) {
+      appState.subjects.splice(idx, 1);
+      saveState();
+      renderSubjectList();
+    }
+
+    function resetData() {
+      if (confirm('入力した正解および解答データをすべて消去しますか？')) {
+        appState.keyAnswers = {};
+        appState.studentAnswers = {};
+        saveState();
+        renderSheet();
+      }
+    }
+
+    // --- 入力シート管理 ---
+    function setAnswerMode(mode) {
+      currentInputMode = mode;
+      const btnSt = document.getElementById('mode-student');
+      const btnKey = document.getElementById('mode-key');
+      const badge = document.getElementById('mode-badge');
+
+      if (mode === 'student') {
+        btnSt.className = 'px-3 py-1.5 rounded-md bg-white shadow text-indigo-600 font-bold';
+        btnKey.className = 'px-3 py-1.5 rounded-md text-slate-500';
+        badge.className = 'text-xs px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-700 font-bold';
+        badge.innerText = '生徒マーク入力中';
+      } else {
+        btnKey.className = 'px-3 py-1.5 rounded-md bg-white shadow text-amber-600 font-bold';
+        btnSt.className = 'px-3 py-1.5 rounded-md text-slate-500';
+        badge.className = 'text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 font-bold';
+        badge.innerText = '正解キー入力中';
+      }
+      renderSheet();
+    }
+
+    function renderSheet() {
+      const container = document.getElementById('sheet-container');
+      container.innerHTML = '';
+
+      const count = appState.config.count;
+      const optCount = appState.config.options;
+      const answers = currentInputMode === 'student' ? appState.studentAnswers : appState.keyAnswers;
+
+      for (let q = 1; q <= count; q++) {
+        const item = document.createElement('div');
+        item.className = 'bg-white rounded-xl p-3 shadow-sm border border-slate-200 flex items-center justify-between';
+
+        let buttonsHTML = '';
+        for (let opt = 1; opt <= optCount; opt++) {
+          const isSelected = answers[q] === opt;
+          const activeColor = currentInputMode === 'student' 
+            ? 'bg-indigo-600 text-white border-indigo-600 scale-105 shadow' 
+            : 'bg-amber-500 text-white border-amber-500 scale-105 shadow';
+
+          buttonsHTML += `
+            <button onclick="selectOption(${q}, ${opt})" class="w-10 h-10 rounded-full border-2 font-bold text-sm transition-all flex items-center justify-center ${isSelected ? activeColor : 'border-slate-300 text-slate-600 hover:bg-slate-50'}">
+              ${opt}
+            </button>
+          `;
+        }
+
+        item.innerHTML = `
+          <div class="flex items-center gap-3">
+            <span class="w-8 text-right font-bold text-slate-500 text-sm">Q${q}</span>
+            <div class="flex gap-2">${buttonsHTML}</div>
+          </div>
+          ${answers[q] ? `<button onclick="selectOption(${q}, null)" class="text-xs text-slate-400 hover:text-rose-500 px-2 py-1">消去</button>` : ''}
+        `;
+        container.appendChild(item);
+      }
+    }
+
+    function selectOption(q, opt) {
+      const target = currentInputMode === 'student' ? appState.studentAnswers : appState.keyAnswers;
+      if (opt === null || target[q] === opt) {
+        delete target[q];
+      } else {
+        target[q] = opt;
+      }
+      saveState();
+      renderSheet();
+    }
+
+    // --- 採点ロジック & 結果表示 ---
+    function calculateScore() {
+      const count = appState.config.count;
+      let totalCorrect = 0;
+      let answeredCount = 0;
+
+      const detailContainer = document.getElementById('res-detail-list');
+      detailContainer.innerHTML = '';
+
+      // 問題ごとの判定計算
+      for (let q = 1; q <= count; q++) {
+        const student = appState.studentAnswers[q];
+        const key = appState.keyAnswers[q];
+        const isCorrect = student !== undefined && key !== undefined && student === key;
+        
+        if (student !== undefined) answeredCount++;
+        if (isCorrect) totalCorrect++;
+
+        const row = document.createElement('div');
+        row.className = 'py-2.5 flex items-center justify-between';
+        
+        let statusBadge = `<span class="text-slate-400 text-xs">未入力</span>`;
+        if (key === undefined) {
+          statusBadge = `<span class="text-amber-500 text-xs font-bold">正解未設定</span>`;
+        } else if (isCorrect) {
+          statusBadge = `<span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-xs font-bold">正解 (◯)</span>`;
+        } else {
+          statusBadge = `<span class="bg-rose-100 text-rose-700 px-2 py-0.5 rounded text-xs font-bold">不正解 (✕)</span>`;
+        }
+
+        row.innerHTML = `
+          <div class="flex items-center gap-3">
+            <span class="font-bold text-slate-600 w-8">Q${q}</span>
+            ${statusBadge}
+          </div>
+          <div class="text-xs text-slate-500">
+            解答: <strong class="text-slate-700">${student || '-'}</strong> / 正解: <strong class="text-slate-700">${key || '-'}</strong>
+          </div>
+        `;
+        detailContainer.appendChild(row);
+      }
+
+      const totalPct = count > 0 ? Math.round((totalCorrect / count) * 100) : 0;
+      document.getElementById('res-score-pct').innerHTML = `${totalPct}<span class="text-2xl font-bold">%</span>`;
+      document.getElementById('res-score-detail').innerText = `正解数: ${totalCorrect} / ${count}問`;
+
+      // 科目別集計
+      const subContainer = document.getElementById('res-subjects');
+      subContainer.innerHTML = '';
+
+      appState.subjects.forEach(sub => {
+        let subCorrect = 0;
+        let subTotal = 0;
+
+        for (let q = sub.start; q <= Math.min(sub.end, count); q++) {
+          subTotal++;
+          if (appState.studentAnswers[q] !== undefined && appState.keyAnswers[q] !== undefined && appState.studentAnswers[q] === appState.keyAnswers[q]) {
+            subCorrect++;
+          }
+        }
+
+        const subPct = subTotal > 0 ? Math.round((subCorrect / subTotal) * 100) : 0;
+
+        const subEl = document.createElement('div');
+        subEl.className = 'space-y-1';
+        subEl.innerHTML = `
+          <div class="flex justify-between text-xs font-bold">
+            <span class="text-slate-700">${sub.name} (${sub.start}〜${sub.end}問)</span>
+            <span class="text-indigo-600">${subCorrect} / ${subTotal}問 (${subPct}%)</span>
+          </div>
+          <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+            <div class="bg-indigo-600 h-full transition-all duration-500" style="width: ${subPct}%"></div>
+          </div>
+        `;
+        subContainer.appendChild(subEl);
+      });
+    }
+
+    // --- Service Worker 登録 ---
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('Service Worker 登録成功:', reg.scope))
+          .catch(err => console.log('Service Worker 登録失敗:', err));
+      });
+    }
+  </script>
+</body>
+</html>
