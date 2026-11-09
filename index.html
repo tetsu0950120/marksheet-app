@@ -67,7 +67,7 @@
           <h3 class="text-sm font-bold text-slate-700">科目・大問配分</h3>
           <button onclick="addSubjectRow()" class="text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-1.5 rounded-lg font-semibold transition">+ 科目を追加</button>
         </div>
-        <div id="subject-list" class="space-y-2">
+        <div id="subject-list" class="space-y-3">
           <!-- 動的生成 -->
         </div>
       </div>
@@ -80,7 +80,6 @@
 
     <!-- SECTION 2: 解答入力画面 -->
     <section id="sec-input" class="hidden space-y-4">
-      <!-- 入力モード切り替えバー -->
       <div class="bg-white p-3 rounded-xl shadow-sm flex items-center justify-between">
         <div class="flex bg-slate-100 p-1 rounded-lg text-xs font-semibold">
           <button id="mode-student" onclick="setAnswerMode('student')" class="px-3 py-1.5 rounded-md bg-white shadow text-indigo-600">生徒のマーク入力</button>
@@ -89,10 +88,7 @@
         <span id="mode-badge" class="text-xs px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-700 font-bold">生徒マークモード</span>
       </div>
 
-      <!-- マークシートリスト -->
-      <div id="sheet-container" class="space-y-3">
-        <!-- 動的生成 -->
-      </div>
+      <div id="sheet-container" class="space-y-3"></div>
 
       <div class="pt-2">
         <button onclick="switchTab('result'); calculateScore();" class="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition">採点実行 & 結果表示</button>
@@ -101,14 +97,12 @@
 
     <!-- SECTION 3: 採点結果画面 -->
     <section id="sec-result" class="hidden space-y-5">
-      <!-- 総合結果カード -->
       <div class="bg-gradient-to-br from-indigo-600 to-indigo-800 text-white rounded-2xl p-6 shadow-md text-center space-y-2">
         <p class="text-xs uppercase tracking-wider text-indigo-200">総合正答率</p>
         <div class="text-5xl font-black tracking-tight" id="res-score-pct">0<span class="text-2xl font-bold">%</span></div>
         <p class="text-sm text-indigo-100" id="res-score-detail">正解数: 0 / 0問</p>
       </div>
 
-      <!-- 保存 & CSVダウンロード操作パネル -->
       <div class="bg-white rounded-xl shadow-sm p-5 space-y-4">
         <h3 class="text-base font-bold text-slate-700 border-b pb-2">結果の保存 & 出力</h3>
         <div class="flex flex-col sm:flex-row gap-2">
@@ -125,48 +119,37 @@
         </div>
       </div>
 
-      <!-- 保存済み履歴リスト -->
       <div class="bg-white rounded-xl shadow-sm p-5 space-y-3">
         <h3 class="text-base font-bold text-slate-700 border-b pb-2">保存済み履歴</h3>
-        <div id="history-list" class="space-y-2 text-sm">
-          <!-- 動的生成 -->
-        </div>
+        <div id="history-list" class="space-y-2 text-sm"></div>
       </div>
 
-      <!-- 科目別結果 -->
       <div class="bg-white rounded-xl shadow-sm p-5 space-y-4">
         <h3 class="text-base font-bold text-slate-700 border-b pb-2">科目別正答率</h3>
-        <div id="res-subjects" class="space-y-3">
-          <!-- 動的生成 -->
-        </div>
+        <div id="res-subjects" class="space-y-3"></div>
       </div>
 
-      <!-- 設問別詳細一覧 -->
       <div class="bg-white rounded-xl shadow-sm p-5 space-y-3">
         <h3 class="text-base font-bold text-slate-700 border-b pb-2">設問別正誤一覧</h3>
-        <div id="res-detail-list" class="divide-y divide-slate-100 text-sm">
-          <!-- 動的生成 -->
-        </div>
+        <div id="res-detail-list" class="divide-y divide-slate-100 text-sm"></div>
       </div>
     </section>
 
   </main>
 
   <script>
-    // --- アプリデータ構造 ---
     let appState = {
       config: { count: 20, options: 4 },
       subjects: [
         { name: '全体', start: 1, end: 20 }
       ],
-      keyAnswers: {},   // { 1: 2, 2: 4 ... }
-      studentAnswers: {} // { 1: 2, 2: 3 ... }
+      keyAnswers: {},
+      studentAnswers: {}
     };
 
-    let historyList = []; // 保存履歴
+    let historyList = [];
     let currentInputMode = 'student';
 
-    // --- ローカルストレージ自動保存 / 読み込み ---
     function saveState() {
       localStorage.setItem('marksheet_app_data', JSON.stringify(appState));
       localStorage.setItem('marksheet_app_history', JSON.stringify(historyList));
@@ -177,16 +160,11 @@
 
     function loadState() {
       const saved = localStorage.getItem('marksheet_app_data');
-      if (saved) {
-        try { appState = JSON.parse(saved); } catch(e) {}
-      }
+      if (saved) { try { appState = JSON.parse(saved); } catch(e) {} }
       const savedHist = localStorage.getItem('marksheet_app_history');
-      if (savedHist) {
-        try { historyList = JSON.parse(savedHist); } catch(e) {}
-      }
+      if (savedHist) { try { historyList = JSON.parse(savedHist); } catch(e) {} }
     }
 
-    // --- 初期化 & レンダリング ---
     window.addEventListener('DOMContentLoaded', () => {
       loadState();
       renderConfig();
@@ -195,7 +173,6 @@
       renderHistory();
     });
 
-    // --- タブ切替 ---
     function switchTab(tabName) {
       ['config', 'input', 'result'].forEach(t => {
         document.getElementById(`sec-${t}`).classList.add('hidden');
@@ -205,7 +182,6 @@
       document.getElementById(`tab-${tabName}`).className = 'flex-1 py-2 rounded-md transition-all text-center bg-white shadow text-indigo-600 font-bold';
     }
 
-    // --- 設定管理 ---
     function renderConfig() {
       document.getElementById('cfg-count').value = appState.config.count;
       document.getElementById('cfg-options').value = appState.config.options;
@@ -226,22 +202,44 @@
       renderSheet();
     }
 
+    // スライドバー付き科目設定の描画
     function renderSubjectList() {
       const container = document.getElementById('subject-list');
       container.innerHTML = '';
+      const maxCount = appState.config.count;
+
       appState.subjects.forEach((sub, idx) => {
+        // 範囲が最大問題数を超えないようガード
+        if (sub.start > maxCount) sub.start = maxCount;
+        if (sub.end > maxCount) sub.end = maxCount;
+
         const row = document.createElement('div');
-        row.className = 'flex items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200 text-xs sm:text-sm';
+        row.className = 'bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2';
         row.innerHTML = `
-          <input type="text" value="${sub.name}" onchange="updateSubject(${idx}, 'name', this.value)" class="flex-1 border rounded px-2 py-1 focus:outline-none" placeholder="科目名">
-          <input type="number" value="${sub.start}" min="1" max="${appState.config.count}" onchange="updateSubject(${idx}, 'start', this.value)" class="w-14 border rounded px-1 py-1 text-center">
-          <span>〜</span>
-          <input type="number" value="${sub.end}" min="1" max="${appState.config.count}" onchange="updateSubject(${idx}, 'end', this.value)" class="w-14 border rounded px-1 py-1 text-center">
-          <span class="text-slate-400">問</span>
-          ${appState.subjects.length > 1 ? `<button onclick="removeSubjectRow(${idx})" class="text-rose-500 font-bold px-1">✕</button>` : ''}
+          <div class="flex items-center gap-2">
+            <input type="text" value="${sub.name}" onchange="updateSubject(${idx}, 'name', this.value)" class="flex-1 border rounded-lg px-2.5 py-1.5 text-sm font-bold bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="科目名">
+            ${appState.subjects.length > 1 ? `<button onclick="removeSubjectRow(${idx})" class="text-rose-500 hover:text-rose-700 text-xs font-bold px-2 py-1">削除</button>` : ''}
+          </div>
+          <div class="flex items-center gap-3 text-xs text-slate-600">
+            <span class="font-semibold w-12">開始: <strong id="start-val-${idx}">${sub.start}</strong>問</span>
+            <input type="range" min="1" max="${maxCount}" value="${sub.start}" oninput="onSliderInput(${idx}, 'start', this.value)" class="flex-1 accent-indigo-600 cursor-pointer">
+          </div>
+          <div class="flex items-center gap-3 text-xs text-slate-600">
+            <span class="font-semibold w-12">終了: <strong id="end-val-${idx}">${sub.end}</strong>問</span>
+            <input type="range" min="1" max="${maxCount}" value="${sub.end}" oninput="onSliderInput(${idx}, 'end', this.value)" class="flex-1 accent-indigo-600 cursor-pointer">
+          </div>
         `;
         container.appendChild(row);
       });
+    }
+
+    function onSliderInput(idx, key, val) {
+      const numVal = parseInt(val) || 1;
+      appState.subjects[idx][key] = numVal;
+      
+      // リアルタイムで数値ラベルを更新
+      document.getElementById(`${key}-val-${idx}`).innerText = numVal;
+      saveState();
     }
 
     function addSubjectRow() {
@@ -254,7 +252,6 @@
 
     function updateSubject(idx, key, val) {
       if (key === 'name') appState.subjects[idx].name = val;
-      else appState.subjects[idx][key] = parseInt(val) || 1;
       saveState();
     }
 
@@ -273,7 +270,6 @@
       }
     }
 
-    // --- 入力シート管理 ---
     function setAnswerMode(mode) {
       currentInputMode = mode;
       const btnSt = document.getElementById('mode-student');
@@ -342,7 +338,6 @@
       renderSheet();
     }
 
-    // --- 採点ロジック ---
     function calculateScore() {
       const count = appState.config.count;
       let totalCorrect = 0;
@@ -384,7 +379,6 @@
       document.getElementById('res-score-pct').innerHTML = `${totalPct}<span class="text-2xl font-bold">%</span>`;
       document.getElementById('res-score-detail').innerText = `正解数: ${totalCorrect} / ${count}問`;
 
-      // 科目別集計
       const subContainer = document.getElementById('res-subjects');
       subContainer.innerHTML = '';
 
@@ -418,7 +412,6 @@
       renderHistory();
     }
 
-    // --- 名前を付けて保存・履歴機能 ---
     function saveNamedResult() {
       const input = document.getElementById('save-title');
       const title = input.value.trim() || `採点結果_${new Date().toLocaleString('ja-JP').slice(0, 16)}`;
@@ -482,14 +475,12 @@
       }
     }
 
-    // --- CSV出力（ダウンロード）機能 ---
     function exportCSV() {
       const count = appState.config.count;
       const titleInput = document.getElementById('save-title').value.trim();
       const fileName = titleInput ? `${titleInput}.csv` : `マークシート採点結果_${new Date().toISOString().slice(0, 10)}.csv`;
 
-      // CSVデータ作成
-      let csvContent = '\uFEFF'; // UTF-8 BOM
+      let csvContent = '\uFEFF';
       csvContent += `設問番号,生徒解答,正解,判定,科目\n`;
 
       for (let q = 1; q <= count; q++) {
@@ -500,7 +491,6 @@
           judge = (student === key) ? '正解' : '不正解';
         }
 
-        // 該当科目名の判定
         let subName = '';
         const sub = appState.subjects.find(s => q >= s.start && q <= s.end);
         if (sub) subName = sub.name;
@@ -508,7 +498,6 @@
         csvContent += `Q${q},${student},${key},${judge},"${subName}"\n`;
       }
 
-      // ファイルダウンロード処理
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
@@ -520,7 +509,6 @@
       document.body.removeChild(link);
     }
 
-    // --- Service Worker 登録 ---
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js')
