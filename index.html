@@ -167,6 +167,7 @@
 
     window.addEventListener('DOMContentLoaded', () => {
       loadState();
+      recalculateSubjectRanges(); // 自動計算の整合性チェック
       renderConfig();
       renderSubjectList();
       renderSheet();
@@ -193,25 +194,46 @@
       appState.config.count = count;
       appState.config.options = options;
 
-      if (appState.subjects.length === 1 && appState.subjects[0].name === '全体') {
-        appState.subjects[0].end = count;
-      }
+      // 総問題数変更時に自動連動で各科目の範囲を再計算
+      recalculateSubjectRanges();
       
       saveState();
       renderSubjectList();
       renderSheet();
     }
 
-    // スライドバー付き科目設定の描画（文字サイズ拡大版）
+    // 前の科目の終了位置に連動して次の科目の開始位置を自動調整する関数
+    function recalculateSubjectRanges() {
+      const maxCount = appState.config.count;
+      let nextStart = 1;
+
+      appState.subjects.forEach((sub, idx) => {
+        sub.start = nextStart;
+        if (sub.end < sub.start) {
+          sub.end = sub.start;
+        }
+        if (sub.end > maxCount) {
+          sub.end = maxCount;
+        }
+        // 最後の科目なら終了は必ず最大問題数までカバーする（または手動調整可能）
+        if (idx === appState.subjects.length - 1) {
+          sub.end = maxCount;
+        }
+        nextStart = sub.end + 1;
+        if (nextStart > maxCount) {
+          nextStart = maxCount;
+        }
+      });
+    }
+
+    // 連動機能付き科目設定UIの描画
     function renderSubjectList() {
+      recalculateSubjectRanges();
       const container = document.getElementById('subject-list');
       container.innerHTML = '';
       const maxCount = appState.config.count;
 
       appState.subjects.forEach((sub, idx) => {
-        if (sub.start > maxCount) sub.start = maxCount;
-        if (sub.end > maxCount) sub.end = maxCount;
-
         const row = document.createElement('div');
         row.className = 'bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3';
         row.innerHTML = `
@@ -219,38 +241,52 @@
             <input type="text" value="${sub.name}" onchange="updateSubject(${idx}, 'name', this.value)" class="flex-1 border rounded-lg px-3 py-2 text-sm font-bold bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="科目名">
             ${appState.subjects.length > 1 ? `<button onclick="removeSubjectRow(${idx})" class="text-rose-500 hover:text-rose-700 text-xs font-bold px-2.5 py-1">削除</button>` : ''}
           </div>
-          <div class="space-y-1">
-            <div class="flex justify-between text-sm text-slate-700">
-              <span class="font-medium">開始問題</span>
-              <span class="font-bold text-indigo-600 text-base"><strong id="start-val-${idx}">${sub.start}</strong> 問目</span>
-            </div>
-            <input type="range" min="1" max="${maxCount}" value="${sub.start}" oninput="onSliderInput(${idx}, 'start', this.value)" class="w-full h-2 accent-indigo-600 cursor-pointer">
+          
+          <!-- 開始問題（自動連動のため表示のみ、または読み取り専用） -->
+          <div class="flex items-center justify-between bg-white p-2.5 rounded-lg border border-slate-200 text-sm">
+            <span class="font-medium text-slate-700">開始問題</span>
+            <span class="font-bold text-slate-600 text-base">${sub.start} 問目</span>
           </div>
-          <div class="space-y-1">
-            <div class="flex justify-between text-sm text-slate-700">
-              <span class="font-medium">終了問題</span>
-              <span class="font-bold text-indigo-600 text-base"><strong id="end-val-${idx}">${sub.end}</strong> 問目</span>
+
+          <!-- 終了問題調整用 ボタン -->
+          <div class="flex items-center justify-between bg-white p-2.5 rounded-lg border border-slate-200">
+            <span class="text-sm font-medium text-slate-700">終了問題</span>
+            <div class="flex items-center gap-3">
+              <button onclick="adjustEndValue(${idx}, -1)" class="w-9 h-9 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg text-lg flex items-center justify-center transition active:scale-95">ー</button>
+              <span class="font-bold text-indigo-600 text-lg w-12 text-center">${sub.end}</span>
+              <button onclick="adjustEndValue(${idx}, 1)" class="w-9 h-9 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg text-lg flex items-center justify-center transition active:scale-95">＋</button>
             </div>
-            <input type="range" min="1" max="${maxCount}" value="${sub.end}" oninput="onSliderInput(${idx}, 'end', this.value)" class="w-full h-2 accent-indigo-600 cursor-pointer">
           </div>
         `;
         container.appendChild(row);
       });
     }
 
-    function onSliderInput(idx, key, val) {
-      const numVal = parseInt(val) || 1;
-      appState.subjects[idx][key] = numVal;
-      
-      // 大きくした数値ラベルをリアルタイム更新
-      document.getElementById(`${key}-val-${idx}`).innerText = numVal;
+    function adjustEndValue(idx, delta) {
+      const maxCount = appState.config.count;
+      let sub = appState.subjects[idx];
+      let newEnd = sub.end + delta;
+
+      // 終了値は「自身の開始位置以上」かつ「総問題数以下」
+      if (newEnd < sub.start) newEnd = sub.start;
+      if (newEnd > maxCount) newEnd = maxCount;
+
+      sub.end = newEnd;
+
+      // もし次の科目がある場合、次の科目の開始位置が自動で繰り下がるように再計算
+      recalculateSubjectRanges();
       saveState();
+      renderSubjectList();
     }
 
     function addSubjectRow() {
-      const lastEnd = appState.subjects.length > 0 ? appState.subjects[appState.subjects.length - 1].end : 0;
-      const start = Math.min(appState.config.count, lastEnd + 1);
-      appState.subjects.push({ name: `科目 ${appState.subjects.length + 1}`, start: start, end: appState.config.count });
+      const maxCount = appState.config.count;
+      const lastSub = appState.subjects[appState.subjects.length - 1];
+      let nextStart = lastSub ? lastSub.end + 1 : 1;
+      if (nextStart > maxCount) nextStart = maxCount;
+
+      appState.subjects.push({ name: `科目 ${appState.subjects.length + 1}`, start: nextStart, end: maxCount });
+      recalculateSubjectRanges();
       saveState();
       renderSubjectList();
     }
@@ -262,6 +298,7 @@
 
     function removeSubjectRow(idx) {
       appState.subjects.splice(idx, 1);
+      recalculateSubjectRanges();
       saveState();
       renderSubjectList();
     }
