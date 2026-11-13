@@ -17,7 +17,7 @@
     * { -webkit-tap-highlight-color: transparent; }
   </style>
 </head>
-<body class="bg-slate-100 text-slate-800 font-sans min-h-screen pb-12 select-none">
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen pb-20 select-none">
 
   <!-- ヘッダー -->
   <header class="bg-indigo-600 text-white shadow-md sticky top-0 z-30">
@@ -67,9 +67,7 @@
           <h3 class="text-sm font-bold text-slate-700">科目・大問配分</h3>
           <button onclick="addSubjectRow()" class="text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-1.5 rounded-lg font-semibold transition">+ 科目を追加</button>
         </div>
-        <div id="subject-list" class="space-y-3">
-          <!-- 動的生成 -->
-        </div>
+        <div id="subject-list" class="space-y-3"></div>
       </div>
 
       <div class="pt-2 flex gap-3">
@@ -88,7 +86,7 @@
         <span id="mode-badge" class="text-xs px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-700 font-bold">生徒マークモード</span>
       </div>
 
-      <div id="sheet-container" class="space-y-3"></div>
+      <div id="sheet-container" class="space-y-2"></div>
 
       <div class="pt-2">
         <button onclick="switchTab('result'); calculateScore();" class="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition">採点実行 & 結果表示</button>
@@ -137,6 +135,21 @@
 
   </main>
 
+  <!-- 解答入力画面用 フローティング常駐コントロールバー -->
+  <div id="floating-bar" class="hidden fixed bottom-4 left-0 right-0 px-4 z-40">
+    <div class="max-w-3xl mx-auto bg-slate-900/90 backdrop-blur-md text-white p-2.5 rounded-2xl shadow-xl flex items-center justify-between border border-slate-700">
+      <div class="flex items-center gap-2">
+        <button onclick="toggleAnswerMode()" id="float-mode-btn" class="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-2 rounded-xl transition shadow">
+          正解キー入力を開く
+        </button>
+        <span id="float-mode-label" class="text-xs text-slate-300 font-medium">生徒マーク入力中</span>
+      </div>
+      <button onclick="executeScoring()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-xl shadow transition">
+        採点する ❯
+      </button>
+    </div>
+  </div>
+
   <script>
     let appState = {
       config: { count: 20, options: 4 },
@@ -167,7 +180,7 @@
 
     window.addEventListener('DOMContentLoaded', () => {
       loadState();
-      recalculateSubjectRanges(); // 自動計算の整合性チェック
+      recalculateSubjectRanges();
       renderConfig();
       renderSubjectList();
       renderSheet();
@@ -181,6 +194,13 @@
       });
       document.getElementById(`sec-${tabName}`).classList.remove('hidden');
       document.getElementById(`tab-${tabName}`).className = 'flex-1 py-2 rounded-md transition-all text-center bg-white shadow text-indigo-600 font-bold';
+
+      const floatBar = document.getElementById('floating-bar');
+      if (tabName === 'input') {
+        floatBar.classList.remove('hidden');
+      } else {
+        floatBar.classList.add('hidden');
+      }
     }
 
     function renderConfig() {
@@ -194,39 +214,28 @@
       appState.config.count = count;
       appState.config.options = options;
 
-      // 総問題数変更時に自動連動で各科目の範囲を再計算
       recalculateSubjectRanges();
-      
       saveState();
       renderSubjectList();
       renderSheet();
     }
 
-    // 前の科目の終了位置に連動して次の科目の開始位置を自動調整する関数
     function recalculateSubjectRanges() {
       const maxCount = appState.config.count;
       let nextStart = 1;
 
       appState.subjects.forEach((sub, idx) => {
         sub.start = nextStart;
-        if (sub.end < sub.start) {
-          sub.end = sub.start;
-        }
-        if (sub.end > maxCount) {
-          sub.end = maxCount;
-        }
-        // 最後の科目なら終了は必ず最大問題数までカバーする（または手動調整可能）
+        if (sub.end < sub.start) sub.end = sub.start;
+        if (sub.end > maxCount) sub.end = maxCount;
         if (idx === appState.subjects.length - 1) {
           sub.end = maxCount;
         }
         nextStart = sub.end + 1;
-        if (nextStart > maxCount) {
-          nextStart = maxCount;
-        }
+        if (nextStart > maxCount) nextStart = maxCount;
       });
     }
 
-    // 連動機能付き科目設定UIの描画
     function renderSubjectList() {
       recalculateSubjectRanges();
       const container = document.getElementById('subject-list');
@@ -241,16 +250,12 @@
             <input type="text" value="${sub.name}" onchange="updateSubject(${idx}, 'name', this.value)" class="flex-1 border rounded-lg px-3 py-2 text-sm font-bold bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="科目名">
             ${appState.subjects.length > 1 ? `<button onclick="removeSubjectRow(${idx})" class="text-rose-500 hover:text-rose-700 text-xs font-bold px-2.5 py-1">削除</button>` : ''}
           </div>
-          
-          <!-- 開始問題（自動連動のため表示のみ、または読み取り専用） -->
           <div class="flex items-center justify-between bg-white p-2.5 rounded-lg border border-slate-200 text-sm">
             <span class="font-medium text-slate-700">開始問題</span>
             <span class="font-bold text-slate-600 text-base">${sub.start} 問目</span>
           </div>
-
-          <!-- 終了問題調整用 ボタン -->
           <div class="flex items-center justify-between bg-white p-2.5 rounded-lg border border-slate-200">
-            <span class="text-sm font-medium text-slate-700">終了問題</span>
+            <span class="font-medium text-slate-700">終了問題</span>
             <div class="flex items-center gap-3">
               <button onclick="adjustEndValue(${idx}, -1)" class="w-9 h-9 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg text-lg flex items-center justify-center transition active:scale-95">ー</button>
               <span class="font-bold text-indigo-600 text-lg w-12 text-center">${sub.end}</span>
@@ -267,13 +272,10 @@
       let sub = appState.subjects[idx];
       let newEnd = sub.end + delta;
 
-      // 終了値は「自身の開始位置以上」かつ「総問題数以下」
       if (newEnd < sub.start) newEnd = sub.start;
       if (newEnd > maxCount) newEnd = maxCount;
 
       sub.end = newEnd;
-
-      // もし次の科目がある場合、次の科目の開始位置が自動で繰り下がるように再計算
       recalculateSubjectRanges();
       saveState();
       renderSubjectList();
@@ -317,21 +319,43 @@
       const btnSt = document.getElementById('mode-student');
       const btnKey = document.getElementById('mode-key');
       const badge = document.getElementById('mode-badge');
+      const floatBtn = document.getElementById('float-mode-btn');
+      const floatLabel = document.getElementById('float-mode-label');
 
       if (mode === 'student') {
         btnSt.className = 'px-3 py-1.5 rounded-md bg-white shadow text-indigo-600 font-bold';
         btnKey.className = 'px-3 py-1.5 rounded-md text-slate-500';
         badge.className = 'text-xs px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-700 font-bold';
         badge.innerText = '生徒マーク入力中';
+        
+        floatBtn.className = 'bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-2 rounded-xl transition shadow';
+        floatBtn.innerText = '正解キー入力を開く';
+        floatLabel.innerText = '生徒マーク入力中';
       } else {
         btnKey.className = 'px-3 py-1.5 rounded-md bg-white shadow text-amber-600 font-bold';
         btnSt.className = 'px-3 py-1.5 rounded-md text-slate-500';
         badge.className = 'text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 font-bold';
         badge.innerText = '正解キー入力中';
+
+        floatBtn.className = 'bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition shadow';
+        floatBtn.innerText = '生徒マークに戻る';
+        floatLabel.innerText = '正解キー入力中';
       }
       renderSheet();
     }
 
+    function toggleAnswerMode() {
+      const nextMode = (currentInputMode === 'student') ? 'key' : 'student';
+      setAnswerMode(nextMode);
+    }
+
+    function executeScoring() {
+      switchTab('result');
+      calculateScore();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // 10問ごとに色が変わる（ストライプ配色）マークシート描画関数
     function renderSheet() {
       const container = document.getElementById('sheet-container');
       container.innerHTML = '';
@@ -342,7 +366,12 @@
 
       for (let q = 1; q <= count; q++) {
         const item = document.createElement('div');
-        item.className = 'bg-white rounded-xl p-3 shadow-sm border border-slate-200 flex items-center justify-between';
+        
+        // 10問ブロックごとに背景色を切り替え (0〜9問目:白, 10〜19問目:薄いブルー系, 20〜29問目:白 ...)
+        const blockIndex = Math.floor((q - 1) / 10);
+        const bgClass = (blockIndex % 2 === 0) ? 'bg-white' : 'bg-sky-50/70 border-sky-200';
+
+        item.className = `${bgClass} rounded-xl p-3 shadow-sm border border-slate-200 flex items-center justify-between transition-colors`;
 
         let buttonsHTML = '';
         for (let opt = 1; opt <= optCount; opt++) {
@@ -352,7 +381,7 @@
             : 'bg-amber-500 text-white border-amber-500 scale-105 shadow';
 
           buttonsHTML += `
-            <button onclick="selectOption(${q}, ${opt})" class="w-10 h-10 rounded-full border-2 font-bold text-sm transition-all flex items-center justify-center ${isSelected ? activeColor : 'border-slate-300 text-slate-600 hover:bg-slate-50'}">
+            <button onclick="selectOption(${q}, ${opt})" class="w-10 h-10 rounded-full border-2 font-bold text-sm transition-all flex items-center justify-center ${isSelected ? activeColor : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}">
               ${opt}
             </button>
           `;
@@ -360,7 +389,7 @@
 
         item.innerHTML = `
           <div class="flex items-center gap-3">
-            <span class="w-8 text-right font-bold text-slate-500 text-sm">Q${q}</span>
+            <span class="w-8 text-right font-bold ${blockIndex % 2 === 0 ? 'text-slate-500' : 'text-sky-700'} text-sm">Q${q}</span>
             <div class="flex gap-2">${buttonsHTML}</div>
           </div>
           ${answers[q] ? `<button onclick="selectOption(${q}, null)" class="text-xs text-slate-400 hover:text-rose-500 px-2 py-1">消去</button>` : ''}
