@@ -355,7 +355,7 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    // 10問ごとに色が変わる（ストライプ配色）マークシート描画関数
+    // 5問ごとに色が変わる（ストライプ配色）マークシート描画関数
     function renderSheet() {
       const container = document.getElementById('sheet-container');
       container.innerHTML = '';
@@ -367,8 +367,8 @@
       for (let q = 1; q <= count; q++) {
         const item = document.createElement('div');
         
-        // 10問ブロックごとに背景色を切り替え (0〜9問目:白, 10〜19問目:薄いブルー系, 20〜29問目:白 ...)
-        const blockIndex = Math.floor((q - 1) / 10);
+        // 5問ブロックごとに背景色を切り替え (0〜4問目:白, 5〜9問目:薄いブルー系, 10〜14問目:白 ...)
+        const blockIndex = Math.floor((q - 1) / 5);
         const bgClass = (blockIndex % 2 === 0) ? 'bg-white' : 'bg-sky-50/70 border-sky-200';
 
         item.className = `${bgClass} rounded-xl p-3 shadow-sm border border-slate-200 flex items-center justify-between transition-colors`;
